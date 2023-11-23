@@ -1,0 +1,114 @@
+# hive同步es
+
+1. 下载 [es-hadoop](https://www.elastic.co/cn/downloads/past-releases/elasticsearch-apache-hadoop-7-16-2) 包，解压后，将 `elasticsearch-hadoop-hive-7.16.2.jar` 上传到hdfs, 再将其加载到hive中
+
+```
+[root@bigdata-cdh01 servers]# hadoop fs -mkdir /user/hive/es
+[root@bigdata-cdh01 servers]# hadoop fs -put elasticsearch-hadoop-hive-7.16.2.jar /user/hive/es
+
+hive (default)> add jar hdfs:///user/hive/es/elasticsearch-hadoop-hive-7.16.2.jar;
+converting to local hdfs:///user/hive/es/elasticsearch-hadoop-hive-7.16.2.jar
+Added [/tmp/96241e28-23d1-42ae-845c-1349751a4b2c_resources/elasticsearch-hadoop-hive-7.16.2.jar] to class path
+Added resources: [hdfs:///user/hive/es/elasticsearch-hadoop-hive-7.16.2.jar]
+```
+
+2. 在hive中创建用于测试的表
+
+```
+CREATE TABLE `users`(
+`id` string,
+`name` string, 
+`age` string); 
+
+hive (default)> insert into `users` values('1','zhangsan','23'),('2','lisi','45'),('3','wangwu',34);
+
+create external table hive_es(
+`id` string,
+`name` string,
+`age` string)
+STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler'
+TBLPROPERTIES(
+'es.resource' = 'es_mytest/es_mytest',
+'es.nodes'='192.168.31.180',
+'es.port'='9200',
+'es.index.auto.create' = 'true',
+'es.index.refresh_interval' = '-1',
+'es.index.number_of_replicas' = '0',
+'es.batch.write.retry.count' = '6',
+'es.batch.write.retry.wait' = '60s');
+```
+将数据加载到 `hive_es` 表中
+
+```
+hive (default)> insert into hive_es select * from users;
+```
+
+在hive中查看
+
+```
+hive (default)> select * from hive_es;
+OK
+hive_es.id	hive_es.name	hive_es.age
+1	zhangsan	23
+2	lisi	45
+3	wangwu	34
+```
+
+在es中查看
+
+```
+[root@bigdata-cdh01 elasticsearch-7.16.2]# curl -XGET 'http://192.168.31.180:9200/es_mytest/_search?pretty'
+{
+  "took" : 9,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 3,
+      "relation" : "eq"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "es_mytest",
+        "_type" : "es_mytest",
+        "_id" : "RLBe_IsBCn69Y7AWp_yN",
+        "_score" : 1.0,
+        "_source" : {
+          "id" : "1",
+          "name" : "zhangsan",
+          "age" : "23"
+        }
+      },
+      {
+        "_index" : "es_mytest",
+        "_type" : "es_mytest",
+        "_id" : "RbBe_IsBCn69Y7AWp_yT",
+        "_score" : 1.0,
+        "_source" : {
+          "id" : "2",
+          "name" : "lisi",
+          "age" : "45"
+        }
+      },
+      {
+        "_index" : "es_mytest",
+        "_type" : "es_mytest",
+        "_id" : "RrBe_IsBCn69Y7AWp_yT",
+        "_score" : 1.0,
+        "_source" : {
+          "id" : "3",
+          "name" : "wangwu",
+          "age" : "34"
+        }
+      }
+    ]
+  }
+}
+
+```
