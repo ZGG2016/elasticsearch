@@ -112,3 +112,5 @@ hive_es.id	hive_es.name	hive_es.age
 }
 
 ```
+
+[官网描述](https://www.elastic.co/guide/en/elasticsearch/hadoop/current/hive.html)
